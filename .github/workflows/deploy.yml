@@ -104,14 +104,17 @@ jobs:
       - name: Deploy Vlocity DataPacks
         if: env.HAS_VLOCITY == 'true'
         run: |
-          # ดึง Token เพื่อสร้าง Property file แบบ runtime
+          echo "📍 Current Directory: $(pwd)"
+          echo "📁 Listing vlocity folder content:"
+          ls -R vlocity/
+          
           ACCESS_TOKEN=$(sf org display --json | jq -r '.result.accessToken')
           INSTANCE_URL=$(sf org display --json | jq -r '.result.instanceUrl')
           
           echo "sf.accessToken = $ACCESS_TOKEN" > pipeline.properties
           echo "sf.instanceUrl = $INSTANCE_URL" >> pipeline.properties
-          
-          echo "📦 Running VBT PackDeploy..."
+
+          # เพิ่ม --refreshVlocityDataPackMapping เพื่อล้าง cache เดิม
           vlocity -propertyfile pipeline.properties \
                   -job vbt-config/EPC.yaml \
                   -manifest '${{ env.VLOCITY_MANIFEST }}' \
@@ -120,8 +123,6 @@ jobs:
                   --vlocity.refreshVlocityDataPackMapping true \
                   --simpleLogging false \
                   --verbose
-          
-          rm pipeline.properties
 
       - name: Debug File System
         run: |
