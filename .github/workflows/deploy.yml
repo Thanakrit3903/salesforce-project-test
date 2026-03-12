@@ -77,14 +77,13 @@ jobs:
       - name: Apply Vlocity Fixes (Manual Resolutions)
         if: env.HAS_VLOCITY == 'true'
         run: |
-          echo "🔧 Disabling Product2 Post-Process to prevent SOQL 101..."
-          
-          # เปลี่ยนมาใช้คำสั่งนี้แทน
+          echo "🔧 Disabling Product2 Post-Process..."
+          # เติม namespace vlocity_cmt__ เข้าไปที่ชื่อ object
           sf data update record \
-            --sobject VlocityDataPackConfiguration__mdt \
+            --sobject vlocity_cmt__VlocityDataPackConfiguration__mdt \
             --where "DeveloperName='Product2'" \
-            --values "DefaultImportPostProcess__c=''" || echo "⚠️ Warning: Could not find Product2 Metadata Configuration"
-
+            --values "DefaultImportPostProcess__c=''" || echo "⚠️ Warning: Metadata not found"
+            
       # --- STEP 4: METADATA DEPLOYMENT (APEX, LWC, ETC.) ---
       - name: Deploy Salesforce Metadata
         id: deploy_sf
