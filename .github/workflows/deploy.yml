@@ -1,29 +1,30 @@
-name: Salesforce Deploy Full System
+name: Salesforce & Vlocity Unified Deploy
 on:
   push:
     branches:
       - main
 
 permissions:
-  contents: write  # เพื่อให้ Pipeline มีสิทธิ์สร้างและ Push Tag กลับไปที่ Gi
+  contents: write
 
 jobs:
   Full_System_Deploy:
     runs-on: ubuntu-latest
-    steps: 
+    steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 
 
-      - name: Install Node & Salesforce CLI
+      - name: Install Node & Tools
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Plugins
+      - name: Install Salesforce CLI & Plugins
         run: |
           npm install @salesforce/cli --global
+          npm install -g vlocity@1.17.15
           echo 'y' | sf plugins install sfdx-git-delta
         
       - name: Authenticate to Salesforce
@@ -32,231 +33,102 @@ jobs:
         run: |
           echo "$SFDX_AUTH_URL" > sfdx_auth.txt
           sf org login sfdx-url --sfdx-url-file sfdx_auth.txt --set-default
-          rm sfdx_auth.txt # ลบไฟล์ทิ้งทันทีเพื่อความปลอดภัย
+          rm sfdx_auth.txt
 
-      #- name: Disable SSL Check (แก้ขัดดอก)
-       # run: |
-        #  echo "NODE_TLS_REJECT_UNAUTHORIZED=0" >> $GITHUB_ENV
-         # sf config set org-api-metadata-verify-ssl=false --global
-
-      - name: Step 1 - Generate Delta (ดึงเฉพาะเลข SHA แถวเดียว)
+      # --- STEP 1: DELTA GENERATION (FOR APEX/METADATA) ---
+      - name: Generate Salesforce Delta
         id: generate_delta
         run: |
           rm -rf delta && mkdir -p delta
-          
-          # 1. ดึง Tag ทั้งหมดจาก Server ลงเครื่อง Runner
           git fetch --tags --force
           
-          # 2. ตรรกะ Bash: หาเลข SHA ของสติกเกอร์ความสำเร็จล่าสุด
-          # เราใช้ 'git rev-parse' เพื่อเอาเฉพาะเลข 40 หลัก ไม่เอาชื่อ Tag มาปน
+          # หาจุดสำเร็จล่าสุดจาก Tag
           if git rev-parse last_successful_deploy >/dev/null 2>&1; then
             FROM_SHA=$(git rev-parse last_successful_deploy)
-            echo "✅ พบจุดสำเร็จล่าสุด (Clear หนี้แล้ว): $FROM_SHA"
           else
-            # ⚠️ ถ้ายังไม่เคยสำเร็จ (Tag ไม่มี) ให้ใช้จุดก่อนการ Push ครั้งนี้
             FROM_SHA=${{ github.event.before }}
-            echo "⚠️ ยังไม่มีจุดสำเร็จ (สะสมหนี้): เริ่มนับจาก $FROM_SHA"
           fi
           
-          # 3. เช็คกรณีเลข 00000 (First Push)
           if [ "$FROM_SHA" = "0000000000000000000000000000000000000000" ] || [ -z "$FROM_SHA" ]; then
             FROM_SHA=$(git rev-parse HEAD~1 2>/dev/null || git rev-list --max-parents=0 HEAD)
           fi
           
-          echo "🚀 FROM_SHA ที่จะใช้ส่งให้ SGD: $FROM_SHA"
+          echo "FROM_SHA=$FROM_SHA" >> $GITHUB_ENV
+          sf sgd source delta --to HEAD --from "$FROM_SHA" --output-dir delta/ --generate-delta
+
+      # --- STEP 2: VLOCITY DELTA DETECTION (JSON DATA PACKS) ---
+      - name: Detect Vlocity Changes
+        id: vlocity_delta
+        run: |
+          # ตรวจสอบการเปลี่ยนแปลงในโฟลเดอร์ vlocity (หรือพาธที่คุณเก็บ JSON)
+          # เราจะเอาชื่อ DataPackType/DataPackName เช่น OmniScript/AccountManagement
+          V_DIFF=$(git diff --name-only ${{ env.FROM_SHA }} HEAD | grep '^vlocity/' | cut -d/ -f2,3 | sort -u | xargs | tr ' ' ',')
           
-          # 4. สั่ง SGD: ใส่ " " ครอบตัวแปรไว้กันแตก
-          sf sgd source delta \
-            --to HEAD \
-            --from "$FROM_SHA" \
-            --output-dir delta/ \
-            --generate-delta
-
-      - name: Step 1.1 - Check Files (กวาดไฟล์อะไรมาบ้าง ที่ใช้การ Deploy)
-        run: |
-          echo "--- รายการไฟล์ใน delta/force-app ---"
-          find delta/force-app -type f || echo "ไม่มีไฟล์ใน force-app (อาจมีแต่การลบ)"
-
-      - name: Step 1.2 - Check Delta Folder Structure
-        run: |
-          echo "--- โครงสร้างโฟลเดอร์ delta ---"
-          ls -la delta/
-          echo "--- โครงสร้างใน destructiveChanges ---"
-          ls -la delta/destructiveChanges || echo "ไม่พบโฟลเดอร์ destructiveChanges"
-          echo "--- โครงสร้างใน package ---"
-          ls -la delta/package || echo "ไม่พบโฟลเดอร์ package"
-
-      - name: Step 1.3.1 - Read Destructive XML (ใบสั่งประหาร)
-        id: read_destructive
-        run: |
-          echo "--- ตรวจสอบรายการที่จะลบบน Org ---"
-          if [ -f "delta/destructiveChanges/destructiveChanges.xml" ]; then
-            cat delta/destructiveChanges/destructiveChanges.xml
-            # เช็คว่ามีรายการสมาชิกที่จะลบจริงไหม
-            if grep -q "<members>" delta/destructiveChanges/destructiveChanges.xml; then
-              echo "HAS_DEL=true" >> $GITHUB_ENV
-              echo "สถานะ: มีรายการสั่งลบ"
-            else
-              echo "HAS_DEL=false" >> $GITHUB_ENV
-              echo "สถานะ: ใบประหารว่างเปล่า"
-            fi
+          if [ -n "$V_DIFF" ]; then
+            echo "HAS_VLOCITY=true" >> $GITHUB_ENV
+            echo "VLOCITY_MANIFEST=$V_DIFF" >> $GITHUB_ENV
+            echo "🎯 Vlocity Components to deploy: $V_DIFF"
           else
-            echo "HAS_DEL=false" >> $GITHUB_ENV
-            echo "สถานะ: ไม่พบไฟล์ใบสั่งประหาร"
+            echo "HAS_VLOCITY=false" >> $GITHUB_ENV
+            echo "☕ No Vlocity changes detected."
           fi
 
-          echo "--- ตรวจสอบหน้าปก (Dummy Package) ---"
-          cat delta/destructiveChanges/package.xml || echo "ไม่พบไฟล์หน้าปกสำหรับชุดลบ"
-
-      - name: Step 1.3.2 - Read Package XML (ใบสั่งของใหม่)
-        id: read_package
+      # --- STEP 3: PRE-DEPLOY FIXES (PREVENT SOQL 101 & DUPLICATES) ---
+      - name: Apply Vlocity Fixes (Manual Resolutions)
+        if: env.HAS_VLOCITY == 'true'
         run: |
-          echo "--- ตรวจสอบรายการที่จะติดตั้งใหม่/อัปเดต ---"
-          if [ -f "delta/package/package.xml" ]; then
-            cat delta/package/package.xml
-            if grep -q "<members>" delta/package/package.xml; then
-              echo "HAS_PKG=true" >> $GITHUB_ENV
-              echo "สถานะ: มีรายการของใหม่ที่จะลง"
-            else
-              echo "HAS_PKG=false" >> $GITHUB_ENV
-              echo "สถานะ: ไม่มีของใหม่ในชุดนี้"
-            fi
-          else
-            echo "HAS_PKG=false" >> $GITHUB_ENV
-          fi
+          echo "🔧 Disabling Product2 Post-Process to prevent SOQL 101..."
+          sf data record update --sobject VlocityDataPackConfiguration__mdt \
+            --where "DeveloperName='Product2'" \
+            --values "DefaultImportPostProcess__c=''" \
+            --use-ambiguous-ids || echo "Skip if metadata not found"
 
-      - name: Step 1.3.3 - Final Decision (ตัดสินใจว่าจะ Deploy หรือไม่)
-        run: |
-          echo "สรุปผลการตรวจสอบ:"
-          echo "มีการสั่งลบ (HAS_DEL): ${{ env.HAS_DEL }}"
-          echo "มีการสั่งลงของ (HAS_PKG): ${{ env.HAS_PKG }}"
+          # หากคุณมีไฟล์สคริปต์ล้างข้อมูลเดิม (จาก Error Resolution.txt ข้อ 3)
+          # sf apex run --file scripts/apex/RemoveOldAttributeAssignments.cls
 
-          if [ "${{ env.HAS_DEL }}" = "true" ] || [ "${{ env.HAS_PKG }}" = "true" ]; then
-            echo "SHOULD_DEPLOY=true" >> $GITHUB_ENV
-            echo "Action: ดำเนินการ Deploy ต่อไป"
-          else
-            echo "SHOULD_DEPLOY=false" >> $GITHUB_ENV
-            echo "Action: ข้ามการ Deploy เนื่องจากไม่มีการเปลี่ยนแปลง"
-          fi    
-
-      - name: Step 1.4 - Read Deployment Package XML
-        run: |
-          echo "--- เนื้อหา package.xml (สำหรับ deploy) ---"
-          cat delta/package/package.xml || echo "ไม่มีไฟล์ package สำหรับ deploy"
-
-      - name: Step 1.5 - Set HAS_CHANGES Variable
+      # --- STEP 4: METADATA DEPLOYMENT (APEX, LWC, ETC.) ---
+      - name: Deploy Salesforce Metadata
+        id: deploy_sf
         run: |
           if [ -f "delta/package/package.xml" ] && grep -q "<types>" delta/package/package.xml; then
-            echo "HAS_CHANGES=true" >> $GITHUB_ENV
-            echo "มีการเปลี่ยนแปลงที่ต้อง Deploy"
+            echo "🚀 Deploying Metadata Delta..."
+            sf project deploy start \
+              --manifest delta/package/package.xml \
+              --pre-destructive-changes delta/destructiveChanges/destructiveChanges.xml \
+              --test-level NoTestRun \
+              --wait 30 --verbose
           else
-            echo "HAS_CHANGES=false" >> $GITHUB_ENV
-            echo "ไม่มีไฟล์ใหม่หรือไฟล์ที่แก้ไข"
+            echo "✅ No Metadata changes to deploy."
           fi
-      - name: Step 2 - ตรวจสอบความสมบูรณ์ของไฟล์ (ป้องกันการลืมไฟล์ XML) -
-        if: env.HAS_CHANGES == 'true'
-        run: |
-          echo "Checking for missing -meta.xml files..."
-          # สคริปต์สั้นๆ เพื่อเช็คว่าถ้ามีไฟล์ .page หรือ .cls ต้องมี -meta.xml คู่กันในโฟลเดอร์ delta
-          # ถ้าไม่มี ระบบจะไปก๊อปปี้มาจากโปรเจกต์หลักให้เอง (ถ้าไฟล์นั้นมีอยู่ใน git history)
-          find delta/force-app -name "*.page" -o -name "*.cls" | while read f; do
-            if [ ! -f "${f}-meta.xml" ]; then
-              echo "Warning: ${f}-meta.xml missing in delta folder. Trying to recover..."
-              cp "${f}-meta.xml" "delta/force-app/${f#delta/force-app/}-meta.xml" || echo "❌ Error: Cannot find source ${f}-meta.xml"
-            fi
-          done
 
-      - name: Step 2.1 - ดึงรายชื่อ Test Classes
-        if: env.HAS_CHANGES == 'true'
+      # --- STEP 5: VLOCITY DEPLOYMENT (OMNISCRIPT, IP, EPC) ---
+      - name: Deploy Vlocity DataPacks
+        if: env.HAS_VLOCITY == 'true'
         run: |
-          # ตรวจสอบว่าทุกบรรทัดภายใต้ run: | ต้องย่อหน้าเยื้องเข้าไป 2 หรือ 10 spaces ให้เท่ากัน
-          TEST_CLASSES=$(grep -oE '<members>[^<]*Test[^<]*</members>' delta/package/package.xml | sed 's/<members>//g;s/<\/members>//g' | xargs)
+          # ดึง Token เพื่อสร้าง Property file แบบ runtime
+          ACCESS_TOKEN=$(sf org display --json | jq -r '.result.accessToken')
+          INSTANCE_URL=$(sf org display --json | jq -r '.result.instanceUrl')
           
-          echo "TEST_CLASSES=$TEST_CLASSES" >> $GITHUB_ENV
-          echo "รายชื่อ Test ที่จะรัน: $TEST_CLASSES"
-
-      - name: Step 3 - Identify Deleted Metadata
-        if: env.SHOULD_DEPLOY == 'true'
-        run: |
-          echo "--- List of files to be DELETED from Salesforce ---"
-          if grep -q "<members>" delta/destructiveChanges/destructiveChanges.xml 2>/dev/null; then
-            grep "<members>" delta/destructiveChanges/destructiveChanges.xml | sed 's/^[[:space:]]*//;s/<members>//g;s/<\/members>//g'
-          else
-            echo "No files identified for deletion."
-          fi
-
-      - name: Step 3.1 - Identify New or Updated Metadata
-        if: env.SHOULD_DEPLOY == 'true'
-        run: |
-          echo "--- List of files to be DEPLOYED/UPDATED to Salesforce ---"
-          if [ -d "delta/force-app" ]; then
-            find delta/force-app -type f | sed 's|delta/force-app/||'
-          else
-            echo "No new or updated files identified."
-          fi
-
-      - name: Step 3.2 - Validate and Run Tests (Dry Run)
-        if: env.SHOULD_DEPLOY == 'true'
-        run: |
-          echo "🚀 Starting Dry Run Validation (Standard Required: 75%)"
+          echo "sf.accessToken = $ACCESS_TOKEN" > pipeline.properties
+          echo "sf.instanceUrl = $INSTANCE_URL" >> pipeline.properties
           
-          # ใช้ --junit เพื่อให้ระบบเก็บผลลัพธ์ และ --verbose เพื่อความละเอียด
-          # เพิ่ม --coverage-format "terse" เพื่อให้มันสรุป % มาให้ดูด้วย
-          VALIDATE_CMD="sf project deploy validate \
-            --manifest delta/package/package.xml \
-            --pre-destructive-changes delta/destructiveChanges/destructiveChanges.xml \
-            --ignore-warnings \
-            # --dry-run \
-            --wait 30"
+          echo "📦 Running VBT PackDeploy..."
+          vlocity -propertyfile pipeline.properties \
+                  -job vbt-config/EPC.yaml \
+                  -manifest "${{ env.VLOCITY_MANIFEST }}" \
+                  packUpdateSettings \
+                  packDeploy \
+                  --vlocity.activate true \
+                  --vlocity.retry true \
+                  --simpleLogging true
+          
+          rm pipeline.properties
 
-          if [ -n "${{ env.TEST_CLASSES }}" ]; then
-            echo "Running Specified Tests: ${{ env.TEST_CLASSES }}"
-            # ห้ามใส่ " " ครอบ ${{ env.TEST_CLASSES }} เพื่อให้ Shell แยกเป็นหลายไฟล์
-            $VALIDATE_CMD --test-level RunSpecifiedTests --tests ${{ env.TEST_CLASSES }} --verbose
-          else
-            echo "No specific tests found. Validating Metadata only..."
-            $VALIDATE_CMD --test-level NoTestRun
-          fi
-          # --- เพิ่มเงื่อนไขตรวจสอบผล Validation ---
-          if [ $? -eq 0 ]; then
-            echo "✅ Validation Passed: กำลังเตรียมตัวเข้าสู่ขั้นตอน Actual Deployment"
-          else
-            echo "❌ Validation Failed: หยุดการทำงานเพื่อให้ครั้งหน้ากวาดของเดิมมารันใหม่ (Store Component)"
-            exit 1
-          fi
-
-      - name: Step 3.3 - Execute Actual Deployment
-        if: env.SHOULD_DEPLOY == 'true'
+      # --- STEP 6: SUCCESS HANDLING (TAGGING) ---
+      - name: Finalize Deployment (Update Tag)
+        if: success()
         run: |
-          echo "Validation passed! Starting actual deployment..."
-          
-          # 1. สั่ง Deploy จริง
-          sf project deploy start \
-            --manifest delta/package/package.xml \
-            --pre-destructive-changes delta/destructiveChanges/destructiveChanges.xml \
-            --test-level NoTestRun \
-            --ignore-warnings \
-            --wait 30
-            --verbose
-          
-          # 2. เก็บผลสถานะ ($? คือ 0 ถ้าสำเร็จ)
-          DEPLOY_STATUS=$?
-
-          # 3. ตรรกะ "ถ้าพังให้ดอง (Store) ถ้าผ่านให้ล้าง (Clear)"
-          if [ $DEPLOY_STATUS -eq 0 ]; then
-            echo "🎊 Deploy Success! (Round 3 Success)"
-            echo "📝 Clear หนี้เก่า: บันทึกจุดสำเร็จลงใน Tag 'last_successful_deploy'"
-            
-            # ต้องเซตชื่อก่อนแปะแท็ก ไม่งั้น Git จะงงครับ
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            
-            # เลื่อนสติกเกอร์ (Tag) มาที่ Commit ปัจจุบัน (HEAD)
-            git tag -f last_successful_deploy HEAD
-            git push origin last_successful_deploy --force
-          else
-            echo "❌ Deploy Failed! (Round 1 Error)"
-            echo "📦 Store Component: ไม่บันทึก Tag เพื่อให้รอบหน้าเปรียบเทียบจากจุดเดิม"
-            # สั่งให้ Pipeline ขึ้นตัวแดงเพื่อให้พี่รู้ว่ามีงานค้าง
-            exit 1 
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f last_successful_deploy HEAD
+          git push origin last_successful_deploy --force
