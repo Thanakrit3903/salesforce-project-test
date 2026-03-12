@@ -1,5 +1,5 @@
 {
-    "Name": "Test Deploy",
+    "Name": "Test Deploy1",
     "VlocityDataPackType": "OmniScript",
     "VlocityRecordSObjectType": "vlocity_cmt__OmniScript__c",
     "vlocity_cmt__Type__c": "Test",
@@ -14,7 +14,7 @@
             "vlocity_cmt__Type__c": "Test",
             "vlocity_cmt__SubType__c": "Deploy",
             "vlocity_cmt__Language__c": "English",
-            "Name": "Test Deploy",
+            "Name": "Test Deploy1",
             "vlocity_cmt__IsActive__c": true
         }
     ]
