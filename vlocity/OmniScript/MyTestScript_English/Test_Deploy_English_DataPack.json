@@ -1,0 +1,21 @@
+{
+    "Name": "Test Deploy",
+    "VlocityDataPackType": "OmniScript",
+    "VlocityRecordSObjectType": "vlocity_cmt__OmniScript__c",
+    "vlocity_cmt__Type__c": "Test",
+    "vlocity_cmt__SubType__c": "Deploy",
+    "vlocity_cmt__Language__c": "English",
+    "vlocity_cmt__IsActive__c": true,
+    "vlocity_cmt__IsProcedure__c": false,
+    "vlocity_cmt__PropertySet__c": "{\"allowSaveForLater\":true,\"autoFocus\":false}",
+    "vlocity_cmt__Element__c": [
+        {
+            "Name": "Step1",
+            "VlocityDataPackType": "VlocityMatchingKeyObject",
+            "VlocityRecordSObjectType": "vlocity_cmt__Element__c",
+            "vlocity_cmt__Type__c": "Step",
+            "vlocity_cmt__Order__c": 1,
+            "vlocity_cmt__PropertySet__c": "{\"label\":\"Hello from GitHub Actions\"}"
+        }
+    ]
+}
