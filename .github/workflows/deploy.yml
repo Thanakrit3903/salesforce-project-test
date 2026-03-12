@@ -78,13 +78,12 @@ jobs:
         if: env.HAS_VLOCITY == 'true'
         run: |
           echo "🔧 Disabling Product2 Post-Process to prevent SOQL 101..."
-          sf data record update --sobject VlocityDataPackConfiguration__mdt \
+          
+          # เปลี่ยนมาใช้คำสั่งนี้แทน
+          sf data update record \
+            --sobject VlocityDataPackConfiguration__mdt \
             --where "DeveloperName='Product2'" \
-            --values "DefaultImportPostProcess__c=''" \
-            --use-ambiguous-ids || echo "Skip if metadata not found"
-
-          # หากคุณมีไฟล์สคริปต์ล้างข้อมูลเดิม (จาก Error Resolution.txt ข้อ 3)
-          # sf apex run --file scripts/apex/RemoveOldAttributeAssignments.cls
+            --values "DefaultImportPostProcess__c=''" || echo "⚠️ Warning: Could not find Product2 Metadata Configuration"
 
       # --- STEP 4: METADATA DEPLOYMENT (APEX, LWC, ETC.) ---
       - name: Deploy Salesforce Metadata
@@ -116,10 +115,11 @@ jobs:
           vlocity -propertyfile pipeline.properties \
                   -job vbt-config/EPC.yaml \
                   -manifest '${{ env.VLOCITY_MANIFEST }}' \
-                  packUpdateSettings \
                   packDeploy \
                   --vlocity.activate true \
-                  --simpleLogging true
+                  --vlocity.refreshVlocityDataPackMapping true \
+                  --simpleLogging false \
+                  --verbose
           
           rm pipeline.properties
 
