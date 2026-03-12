@@ -103,9 +103,12 @@ jobs:
       # --- STEP 5: VLOCITY DEPLOYMENT (OMNISCRIPT, IP, EPC) ---
       - name: Deploy Vlocity DataPacks
         run: |
-          # ... (ส่วนดึง Token เหมือนเดิม) ...
-          
-          # ให้แน่ใจว่าไม่มี Path วางโดดๆ อยู่ข้างล่างคำสั่ง packDeploy
+          ACCESS_TOKEN=$(sf org display --json | jq -r '.result.accessToken')
+          INSTANCE_URL=$(sf org display --json | jq -r '.result.instanceUrl')
+          echo "sf.accessToken = $ACCESS_TOKEN" > pipeline.properties
+          echo "sf.instanceUrl = $INSTANCE_URL" >> pipeline.properties
+
+          # ลำดับที่ถูกต้อง: vlocity [command] [options]
           vlocity packDeploy \
                   -propertyfile pipeline.properties \
                   -job vbt-config/EPC.yaml \
