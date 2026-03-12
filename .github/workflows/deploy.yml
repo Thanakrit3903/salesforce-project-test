@@ -123,6 +123,11 @@ jobs:
           
           rm pipeline.properties
 
+      - name: Debug File System
+        run: |
+          echo "--- เช็คว่าโฟลเดอร์ vlocity อยู่ที่ไหน ---"
+          ls -R vlocity/OmniScript/
+          
       # --- STEP 6: SUCCESS HANDLING (TAGGING) ---
       - name: Finalize Deployment (Update Tag)
         if: success()

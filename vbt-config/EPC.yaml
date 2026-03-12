@@ -1,3 +1,3 @@
-projectPath: ../vlocity-assets    # ชี้ไปที่โฟลเดอร์เก็บ DataPacks
+projectPath: ./vlocity    # ชี้ไปที่โฟลเดอร์เก็บ DataPacks
 autoRetryErrors: true
 maxDepth: 0
