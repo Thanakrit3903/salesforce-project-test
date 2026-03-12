@@ -108,11 +108,11 @@ jobs:
           echo "sf.accessToken = $ACCESS_TOKEN" > pipeline.properties
           echo "sf.instanceUrl = $INSTANCE_URL" >> pipeline.properties
 
-          # ลองเปลี่ยนมาใช้ -path แทน -manifest เพื่อบังคับให้มันมองโฟลเดอร์นี้
-          vlocity -propertyfile pipeline.properties \
+          # ลำดับที่ถูกต้อง: vlocity [command] [options]
+          vlocity packDeploy \
+                  -propertyfile pipeline.properties \
                   -job vbt-config/EPC.yaml \
                   -path vlocity/OmniScript/MyTestScript_English \
-                  packDeploy \
                   --vlocity.activate true \
                   --verbose
 
