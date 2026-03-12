@@ -78,11 +78,12 @@ jobs:
         if: env.HAS_VLOCITY == 'true'
         run: |
           echo "🔧 Disabling Product2 Post-Process..."
-          # เติม namespace vlocity_cmt__ เข้าไปที่ชื่อ object
+          
+          # เพิ่ม NamespacePrefix='vlocity_cmt' เข้าไปในเงื่อนไข เพื่อให้ระบุตัวได้แม่นยำขึ้น
           sf data update record \
             --sobject vlocity_cmt__VlocityDataPackConfiguration__mdt \
-            --where "DeveloperName='Product2'" \
-            --values "DefaultImportPostProcess__c=''" || echo "⚠️ Warning: Metadata not found"
+            --where "DeveloperName='Product2' NamespacePrefix='vlocity_cmt'" \
+            --values "DefaultImportPostProcess__c=''" || echo "⚠️ Warning: Could not uniquely identify Product2 Metadata"
             
       # --- STEP 4: METADATA DEPLOYMENT (APEX, LWC, ETC.) ---
       - name: Deploy Salesforce Metadata
