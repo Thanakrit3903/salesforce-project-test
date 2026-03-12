@@ -60,17 +60,17 @@ jobs:
       - name: Detect Vlocity Changes
         id: vlocity_delta
         run: |
-          # ตรวจสอบการเปลี่ยนแปลงในโฟลเดอร์ vlocity (หรือพาธที่คุณเก็บ JSON)
-          # เราจะเอาชื่อ DataPackType/DataPackName เช่น OmniScript/AccountManagement
-          V_DIFF=$(git diff --name-only ${{ env.FROM_SHA }} HEAD | grep '^vlocity/' | cut -d/ -f2,3 | sort -u | xargs | tr ' ' ',')
+          # หาไฟล์ที่เปลี่ยน และทำให้อยู่ในรูปแบบ JSON Array ["Type/Name","Type/Name"]
+          V_DIFF=$(git diff --name-only ${{ env.FROM_SHA }} HEAD | grep '^vlocity/' | cut -d/ -f2,3 | sort -u)
           
           if [ -n "$V_DIFF" ]; then
+            # แปลงรายการเป็น ["Item1","Item2"]
+            MANIFEST_JSON=$(echo "$V_DIFF" | jq -R . | jq -s -c .)
             echo "HAS_VLOCITY=true" >> $GITHUB_ENV
-            echo "VLOCITY_MANIFEST=$V_DIFF" >> $GITHUB_ENV
-            echo "🎯 Vlocity Components to deploy: $V_DIFF"
+            echo "VLOCITY_MANIFEST=$MANIFEST_JSON" >> $GITHUB_ENV
+            echo "🎯 Manifest created: $MANIFEST_JSON"
           else
             echo "HAS_VLOCITY=false" >> $GITHUB_ENV
-            echo "☕ No Vlocity changes detected."
           fi
 
       # --- STEP 3: PRE-DEPLOY FIXES (PREVENT SOQL 101 & DUPLICATES) ---
@@ -115,11 +115,10 @@ jobs:
           echo "📦 Running VBT PackDeploy..."
           vlocity -propertyfile pipeline.properties \
                   -job vbt-config/EPC.yaml \
-                  -manifest "${{ env.VLOCITY_MANIFEST }}" \
+                  -manifest '${{ env.VLOCITY_MANIFEST }}' \
                   packUpdateSettings \
                   packDeploy \
                   --vlocity.activate true \
-                  --vlocity.retry true \
                   --simpleLogging true
           
           rm pipeline.properties
@@ -132,4 +131,3 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -f last_successful_deploy HEAD
           git push origin last_successful_deploy --force
-          
