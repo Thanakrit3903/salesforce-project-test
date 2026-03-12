@@ -10,12 +10,28 @@
     "vlocity_cmt__PropertySet__c": "{\"allowSaveForLater\":true,\"autoFocus\":false}",
     "vlocity_cmt__Element__c": [
         {
-            "VlocityDataPackType": "OmniScript",
-            "vlocity_cmt__Type__c": "Test",
-            "vlocity_cmt__SubType__c": "Deploy",
-            "vlocity_cmt__Language__c": "English",
-            "Name": "Test Deploy1",
-            "vlocity_cmt__IsActive__c": true
+            "Name": "Step1",
+            "VlocityDataPackType": "VlocityMatchingKeyObject",
+            "VlocityRecordSObjectType": "vlocity_cmt__Element__c",
+            "vlocity_cmt__Type__c": "Step",
+            "vlocity_cmt__Order__c": 1,
+            "vlocity_cmt__PropertySet__c": "{\"label\":\"Step 1 Title\"}",
+            "VlocityRecordSourceKey": "vlocity_cmt__Element__c/vlocity_cmt__OmniScript__c/Test/Deploy/English/Step1"
+        },
+        {
+            "Name": "WelcomeMessage",
+            "VlocityDataPackType": "VlocityMatchingKeyObject",
+            "VlocityRecordSObjectType": "vlocity_cmt__Element__c",
+            "vlocity_cmt__Type__c": "Text Block",
+            "vlocity_cmt__Order__c": 2,
+            "vlocity_cmt__ParentElementId__c": {
+                "VlocityDataPackType": "VlocityMatchingKeyObject",
+                "VlocityRecordSObjectType": "vlocity_cmt__Element__c",
+                "vlocity_cmt__Type__c": "Step",
+                "Name": "Step1"
+            },
+            "vlocity_cmt__PropertySet__c": "{\"HTMLContent\":\"<p>Hello! This was deployed from GitHub Actions successfully.</p>\"}",
+            "VlocityRecordSourceKey": "vlocity_cmt__Element__c/vlocity_cmt__OmniScript__c/Test/Deploy/English/WelcomeMessage"
         }
     ]
 }
