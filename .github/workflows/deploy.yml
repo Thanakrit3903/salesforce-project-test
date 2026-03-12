@@ -86,19 +86,12 @@ jobs:
             --values "DefaultImportPostProcess__c=''" || echo "⚠️ Warning: Could not uniquely identify Product2 Metadata"
 
       # --- STEP 4: METADATA DEPLOYMENT (APEX, LWC, ETC.) ---
-      - name: Deploy Salesforce Metadata
-        id: deploy_sf
+      - name: Deploy Delta Metadata
         run: |
-          if [ -f "delta/package/package.xml" ] && grep -q "<types>" delta/package/package.xml; then
-            echo "🚀 Deploying Metadata Delta..."
-            sf project deploy start \
-              --manifest delta/package/package.xml \
-              --pre-destructive-changes delta/destructiveChanges/destructiveChanges.xml \
-              --test-level NoTestRun \
-              --wait 30 --verbose
-          else
-            echo "✅ No Metadata changes to deploy."
-          fi
+          sf project deploy start \
+            --manifest delta/package/package.xml \
+            --ignore-conflicts \
+            --verbose
 
       # --- STEP 5: VLOCITY DEPLOYMENT (OMNISCRIPT, IP, EPC) ---
       - name: Deploy Vlocity DataPacks
