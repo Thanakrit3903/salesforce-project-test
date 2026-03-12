@@ -1,9 +1,9 @@
 {
-    "Name": "Test Deploy English1",
+    "Name": "Test Deploy English2",
     "VlocityDataPackType": "OmniScript",
     "VlocityRecordSObjectType": "vlocity_cmt__OmniScript__c",
-    "vlocity_cmt__Type__c": "Test1",
-    "vlocity_cmt__SubType__c": "Deploy1",
+    "vlocity_cmt__Type__c": "Test2",
+    "vlocity_cmt__SubType__c": "Deploy2",
     "vlocity_cmt__Language__c": "English",
     "vlocity_cmt__IsActive__c": true,
     "vlocity_cmt__IsProcedure__c": false,

@@ -108,13 +108,12 @@ jobs:
           echo "sf.accessToken = $ACCESS_TOKEN" > pipeline.properties
           echo "sf.instanceUrl = $INSTANCE_URL" >> pipeline.properties
 
-          # ลำดับที่ถูกต้อง: vlocity [command] [options]
           vlocity packDeploy \
-                  -propertyfile pipeline.properties \
-                  -job vbt-config/EPC.yaml \
-                  -path vlocity/OmniScript/MyTestScript_English \
-                  --vlocity.activate true \
-                  --verbose
+            -propertyfile pipeline.properties \
+            -job vbt-config/EPC.yaml \
+            -path vlocity/OmniScript/MyTestScript_English \
+            --vlocity.activate true \
+            --verbose
 
       - name: Debug File System
         run: |
