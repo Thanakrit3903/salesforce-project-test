@@ -132,3 +132,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -f last_successful_deploy HEAD
           git push origin last_successful_deploy --force
+          
