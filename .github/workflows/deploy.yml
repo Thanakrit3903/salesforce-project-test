@@ -84,7 +84,7 @@ jobs:
             --sobject vlocity_cmt__VlocityDataPackConfiguration__mdt \
             --where "DeveloperName='Product2' NamespacePrefix='vlocity_cmt'" \
             --values "DefaultImportPostProcess__c=''" || echo "⚠️ Warning: Could not uniquely identify Product2 Metadata"
-            
+
       # --- STEP 4: METADATA DEPLOYMENT (APEX, LWC, ETC.) ---
       - name: Deploy Salesforce Metadata
         id: deploy_sf
@@ -102,26 +102,18 @@ jobs:
 
       # --- STEP 5: VLOCITY DEPLOYMENT (OMNISCRIPT, IP, EPC) ---
       - name: Deploy Vlocity DataPacks
-        if: env.HAS_VLOCITY == 'true'
         run: |
-          echo "📍 Current Directory: $(pwd)"
-          echo "📁 Listing vlocity folder content:"
-          ls -R vlocity/
-          
           ACCESS_TOKEN=$(sf org display --json | jq -r '.result.accessToken')
           INSTANCE_URL=$(sf org display --json | jq -r '.result.instanceUrl')
-          
           echo "sf.accessToken = $ACCESS_TOKEN" > pipeline.properties
           echo "sf.instanceUrl = $INSTANCE_URL" >> pipeline.properties
 
-          # เพิ่ม --refreshVlocityDataPackMapping เพื่อล้าง cache เดิม
+          # ลองเปลี่ยนมาใช้ -path แทน -manifest เพื่อบังคับให้มันมองโฟลเดอร์นี้
           vlocity -propertyfile pipeline.properties \
                   -job vbt-config/EPC.yaml \
-                  -manifest '${{ env.VLOCITY_MANIFEST }}' \
+                  -path vlocity/OmniScript/MyTestScript_English \
                   packDeploy \
                   --vlocity.activate true \
-                  --vlocity.refreshVlocityDataPackMapping true \
-                  --simpleLogging false \
                   --verbose
 
       - name: Debug File System
